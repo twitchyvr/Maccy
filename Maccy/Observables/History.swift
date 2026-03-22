@@ -445,11 +445,26 @@ class History: ItemsContainer { // swiftlint:disable:this type_body_length
 
   @MainActor
   private func findSimilarItem(_ item: HistoryItem) -> HistoryItem? {
+    // Fast path: hash-based lookup (O(1) vs O(n*m) full table scan)
+    if !item.contentHash.isEmpty {
+      let hash = item.contentHash
+      let descriptor = FetchDescriptor<HistoryItem>(
+        predicate: #Predicate { $0.contentHash == hash }
+      )
+      if let matches = try? Storage.shared.context.fetch(descriptor) {
+        let duplicates = matches.filter { $0 != item }
+        if let duplicate = duplicates.first {
+          return duplicate
+        }
+      }
+    }
+
+    // Slow path fallback: for items without a hash (pre-migration data)
     let descriptor = FetchDescriptor<HistoryItem>()
     if let all = try? Storage.shared.context.fetch(descriptor) {
-      let duplicates = all.filter({ $0 == item || $0.supersedes(item) })
-      if duplicates.count > 1 {
-        return duplicates.first(where: { $0 != item })
+      let duplicates = all.filter({ $0 != item && $0.supersedes(item) })
+      if let duplicate = duplicates.first {
+        return duplicate
       } else {
         return isModified(item)
       }
