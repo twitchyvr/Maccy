@@ -35,6 +35,10 @@ class Clipboard {
 
   private var sourceApp: NSRunningApplication? { NSWorkspace.shared.frontmostApplication }
 
+  // Cache compiled regexes to avoid recompiling on every clipboard poll
+  private var cachedIgnoreRegexps: [String] = []
+  private var cachedIgnoreRegexes: [NSRegularExpression] = []
+
   init() {
     changeCount = pasteboard.changeCount
   }
@@ -246,19 +250,19 @@ class Clipboard {
   }
 
   private func shouldIgnore(_ item: NSPasteboardItem) -> Bool {
-    for regexp in Defaults[.ignoreRegexp] {
-      if let string = item.string(forType: .string) {
-        do {
-          let regex = try NSRegularExpression(pattern: regexp)
-          if regex.numberOfMatches(in: string, range: NSRange(string.startIndex..., in: string)) > 0 {
-            return true
-          }
-        } catch {
-          return false
-        }
-      }
+    guard let string = item.string(forType: .string) else {
+      return false
     }
-    return false
+
+    // Recompile regexes only when the user's pattern list changes
+    let currentPatterns = Defaults[.ignoreRegexp]
+    if currentPatterns != cachedIgnoreRegexps {
+      cachedIgnoreRegexps = currentPatterns
+      cachedIgnoreRegexes = currentPatterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }
+
+    let range = NSRange(string.startIndex..., in: string)
+    return cachedIgnoreRegexes.contains { $0.numberOfMatches(in: string, range: range) > 0 }
   }
 
   private func isEmptyString(_ item: NSPasteboardItem) -> Bool {
