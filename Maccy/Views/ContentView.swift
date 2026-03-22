@@ -7,11 +7,24 @@ struct ContentView: View {
   @State private var scenePhase: ScenePhase = .background
   @State private var suggestion: SmartSuggestion?
   @State private var suggestionDismissed = false
+  @State private var aiProcessing = false
 
   @FocusState private var searchFocused: Bool
 
   private var transformMatches: [PasteTransform] {
     PasteTransform.matches(for: appState.history.searchQuery)
+  }
+
+  /// Detect `:ai <instruction>` queries
+  private var isAIQuery: Bool {
+    let q = appState.history.searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+    return q.hasPrefix(":ai ") && q.count > 4
+  }
+
+  private var aiInstruction: String {
+    let q = appState.history.searchQuery.trimmingCharacters(in: .whitespaces)
+    guard q.lowercased().hasPrefix(":ai ") else { return "" }
+    return String(q.dropFirst(4)).trimmingCharacters(in: .whitespaces)
   }
 
   var body: some View {
@@ -42,11 +55,43 @@ struct ContentView: View {
                 .padding(.top, 4)
               }
 
+              // AI processing indicator
+              if aiProcessing {
+                HStack(spacing: 8) {
+                  ProgressView()
+                    .controlSize(.small)
+                  Text("Claude is transforming...")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .transition(.opacity)
+              }
+
               // Transform suggestions (shown when typing ":")
-              if !transformMatches.isEmpty {
+              if !transformMatches.isEmpty && !isAIQuery {
                 TransformSuggestionsView(transforms: transformMatches) { transform in
                   applyTransform(transform)
                 }
+                .transition(.opacity)
+              }
+
+              // AI transform hint
+              if isAIQuery {
+                HStack(spacing: 6) {
+                  Image(systemName: "sparkles")
+                    .foregroundStyle(.purple)
+                  Text("Press Return to send to Claude: \"\(aiInstruction)\"")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.purple.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 6)
                 .transition(.opacity)
               }
 
@@ -79,6 +124,9 @@ struct ContentView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .task {
         try? await appState.history.load()
+        appState.onAITransform = { [self] in
+          applyAITransform()
+        }
       }
     }
     .onChange(of: scenePhase) {
@@ -117,6 +165,26 @@ struct ContentView: View {
     Task { @MainActor in
       Clipboard.shared.copy(transformed)
       Clipboard.shared.paste()
+    }
+  }
+
+  private func applyAITransform() {
+    guard let selectedItem = appState.navigator.leadHistoryItem else { return }
+    guard let text = selectedItem.item.text else { return }
+    let instruction = aiInstruction
+    guard !instruction.isEmpty else { return }
+
+    aiProcessing = true
+    appState.history.searchQuery = ""
+
+    Task {
+      let result = await AITransform.shared.transform(text: text, instruction: instruction)
+      await MainActor.run {
+        aiProcessing = false
+        appState.popup.close()
+        Clipboard.shared.copy(result)
+        Clipboard.shared.paste()
+      }
     }
   }
 

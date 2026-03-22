@@ -16,5 +16,8 @@
  *   - clipboard_pinned     — Get pinned clipboard items
  *   - clipboard_stats      — Get clipboard usage statistics
  *   - clipboard_transform  — Apply a paste transform to text
+ *   - clipboard_ai         — AI-powered clipboard transformation (Claude)
+ *   - clipboard_context    — Get clipboard as structured context for agents
+ *   - clipboard_watch      — Get items copied since a timestamp
  */
 export {};

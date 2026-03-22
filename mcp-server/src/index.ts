@@ -16,15 +16,20 @@
  *   - clipboard_pinned     — Get pinned clipboard items
  *   - clipboard_stats      — Get clipboard usage statistics
  *   - clipboard_transform  — Apply a paste transform to text
+ *   - clipboard_ai         — AI-powered clipboard transformation (Claude)
+ *   - clipboard_context    — Get clipboard as structured context for agents
+ *   - clipboard_watch      — Get items copied since a timestamp
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { execFileSync } from 'child_process';
+import Anthropic from '@anthropic-ai/sdk';
 import { ClipboardDB } from './clipboard-db.js';
 
 const db = new ClipboardDB();
+const anthropic = new Anthropic();
 
 // ── Paste Transforms (mirrored from Swift PasteTransform.swift) ──
 
@@ -414,6 +419,259 @@ server.tool(
     return {
       content: [{ type: 'text', text: result }],
     };
+  }
+);
+
+// ── Tool: clipboard_ai ──
+
+server.tool(
+  'clipboard_ai',
+  `AI-powered clipboard transformation using Claude. Transforms the given text according to a natural language instruction.
+Examples:
+  - "summarize in 3 bullet points"
+  - "translate to Spanish"
+  - "explain this code"
+  - "rewrite as a professional email"
+  - "convert to a bash script"
+  - "extract all URLs"
+  - "fix the grammar"
+  - "add TypeScript types"`,
+  {
+    text: z
+      .string()
+      .describe('Text to transform (or omit to use current clipboard)'),
+    instruction: z
+      .string()
+      .describe(
+        'What to do with the text — natural language instruction'
+      ),
+    copy_result: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('Copy the result back to clipboard after transforming'),
+  },
+  async ({ text, instruction, copy_result }) => {
+    try {
+      // If no text provided, read from clipboard
+      let inputText = text;
+      if (!inputText || inputText.trim() === '') {
+        try {
+          inputText = execFileSync('/usr/bin/pbpaste', [], {
+            encoding: 'utf-8',
+            timeout: 5000,
+          });
+        } catch {
+          return {
+            content: [
+              { type: 'text', text: 'Clipboard is empty and no text provided' },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [
+          {
+            role: 'user',
+            content: `${instruction}\n\nHere is the text to work with:\n\n${inputText}`,
+          },
+        ],
+        system:
+          'You are a clipboard text transformer. Apply the user\'s instruction to the provided text. Return ONLY the transformed result — no preamble, no explanation, no markdown fences unless the content itself is code. Be precise and concise.',
+      });
+
+      const result =
+        response.content[0].type === 'text' ? response.content[0].text : '';
+
+      if (copy_result) {
+        execFileSync('/usr/bin/pbcopy', [], {
+          input: result,
+          timeout: 5000,
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: copy_result
+              ? `${result}\n\n(Result copied to clipboard)`
+              : result,
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `AI transform failed: ${e instanceof Error ? e.message : String(e)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ── Tool: clipboard_context ──
+
+server.tool(
+  'clipboard_context',
+  `Build a structured context summary from clipboard history for AI agents.
+Returns a digest of recent clipboard activity: what the user has been copying,
+from which apps, content patterns, and frequently used items.
+Useful for agents that need to understand the user's current work context.`,
+  {
+    window_minutes: z
+      .number()
+      .optional()
+      .default(60)
+      .describe('Look back window in minutes (default 60)'),
+  },
+  async ({ window_minutes }) => {
+    try {
+      const items = db.getHistory(100, 0);
+      const cutoff = new Date(Date.now() - window_minutes * 60 * 1000);
+
+      const recentItems = items.filter(
+        (item) => item.lastCopiedAt >= cutoff
+      );
+      const stats = db.getStats();
+
+      // Build structured context
+      const sections: string[] = [
+        `=== Clipboard Context (last ${window_minutes} min) ===`,
+        ``,
+        `Recent activity: ${recentItems.length} items copied`,
+        ``,
+      ];
+
+      // Group by app
+      const byApp: Record<string, string[]> = {};
+      for (const item of recentItems) {
+        const app = item.application ?? 'Unknown';
+        if (!byApp[app]) byApp[app] = [];
+        byApp[app].push(item.title.substring(0, 100));
+      }
+
+      if (Object.keys(byApp).length > 0) {
+        sections.push('-- By Source App --');
+        for (const [app, titles] of Object.entries(byApp)) {
+          sections.push(`  ${app} (${titles.length} items):`);
+          for (const title of titles.slice(0, 5)) {
+            sections.push(`    - "${title}"`);
+          }
+          if (titles.length > 5) {
+            sections.push(`    ... and ${titles.length - 5} more`);
+          }
+        }
+        sections.push('');
+      }
+
+      // Group by category
+      const byCat: Record<string, number> = {};
+      for (const item of recentItems) {
+        const cat = item.category || 'Text';
+        byCat[cat] = (byCat[cat] || 0) + 1;
+      }
+
+      if (Object.keys(byCat).length > 0) {
+        sections.push('-- Content Types --');
+        for (const [cat, count] of Object.entries(byCat).sort(
+          (a, b) => b[1] - a[1]
+        )) {
+          sections.push(`  ${cat}: ${count}`);
+        }
+        sections.push('');
+      }
+
+      // Frequently copied (cross-session)
+      if (stats.topCopied.length > 0) {
+        sections.push('-- Most Frequently Copied (all time) --');
+        for (const item of stats.topCopied.slice(0, 5)) {
+          sections.push(`  "${item.title}" (${item.count}x)`);
+        }
+        sections.push('');
+      }
+
+      // Pinned items
+      const pinned = db.getPinned();
+      if (pinned.length > 0) {
+        sections.push('-- Pinned Items (user-saved) --');
+        for (const item of pinned) {
+          sections.push(`  [${item.pin}] "${item.title.substring(0, 100)}"`);
+        }
+      }
+
+      return {
+        content: [{ type: 'text', text: sections.join('\n') }],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error building context: ${e}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ── Tool: clipboard_watch ──
+
+server.tool(
+  'clipboard_watch',
+  'Get clipboard items copied since a given timestamp. Useful for monitoring what the user copies during a work session.',
+  {
+    since_minutes_ago: z
+      .number()
+      .optional()
+      .default(5)
+      .describe('Get items from the last N minutes (default 5)'),
+  },
+  async ({ since_minutes_ago }) => {
+    try {
+      const items = db.getHistory(50, 0);
+      const cutoff = new Date(Date.now() - since_minutes_ago * 60 * 1000);
+      const recent = items.filter((item) => item.lastCopiedAt >= cutoff);
+
+      if (recent.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `No new clipboard items in the last ${since_minutes_ago} minutes`,
+            },
+          ],
+        };
+      }
+
+      const formatted = recent.map((item) => {
+        const ago = Math.round(
+          (Date.now() - item.lastCopiedAt.getTime()) / 1000
+        );
+        const agoStr =
+          ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
+        return `[${agoStr}] ${item.category || 'Text'} from ${item.application || 'Unknown'}: "${item.title.substring(0, 150)}"`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `${recent.length} items in last ${since_minutes_ago}m:\n\n${formatted.join('\n')}`,
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Error: ${e}` }],
+        isError: true,
+      };
+    }
   }
 );
 

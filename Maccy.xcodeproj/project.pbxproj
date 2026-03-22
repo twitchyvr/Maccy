@@ -151,6 +151,7 @@
 		9155D369AC59FA70C4FDA2A3 /* PasteTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D05572FE2BD2F52B9B6BB61 /* PasteTransform.swift */; };
 		874BF744D48406874DA25001 /* TransformSuggestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8467C283D4ABF38DE0E05758 /* TransformSuggestionsView.swift */; };
 		700DFC62A0BEA424FE0C280C /* SmartSuggestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2924ABEF181BF81F6171C17D /* SmartSuggestionView.swift */; };
+		CFC7B9247FC787AE4E394324 /* AITransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1210B74979C13882AFA649E /* AITransform.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -567,6 +568,7 @@
 		9D05572FE2BD2F52B9B6BB61 /* PasteTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteTransform.swift; sourceTree = "<group>"; };
 		8467C283D4ABF38DE0E05758 /* TransformSuggestionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformSuggestionsView.swift; sourceTree = "<group>"; };
 		2924ABEF181BF81F6171C17D /* SmartSuggestionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSuggestionView.swift; sourceTree = "<group>"; };
+		D1210B74979C13882AFA649E /* AITransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITransform.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -834,6 +836,7 @@
 				2FB5BC9F2CD8F73C008B33F4 /* ApplicationImage.swift */,
 				DA555F072CF0F98F009608BD /* ApplicationImageCache.swift */,
 				DA0EF1871E444B2A00E58577 /* Clipboard.swift */,
+				D1210B74979C13882AFA649E /* AITransform.swift */,
 				9D05572FE2BD2F52B9B6BB61 /* PasteTransform.swift */,
 				5A23C5988F96D2E469694BEA /* ContentCategory.swift */,
 				DAE284FF232257D20080E394 /* ColorImage.swift */,
@@ -1185,6 +1188,7 @@
 				DAC14124232367B200FCFA30 /* Search.swift in Sources */,
 				DA0FFA2A2C8D100C00A66C97 /* ModifierFlags+Description.swift in Sources */,
 				DAEE38471E3DBEB100DD2966 /* AppDelegate.swift in Sources */,
+				CFC7B9247FC787AE4E394324 /* AITransform.swift in Sources */,
 				700DFC62A0BEA424FE0C280C /* SmartSuggestionView.swift in Sources */,
 				874BF744D48406874DA25001 /* TransformSuggestionsView.swift in Sources */,
 				9155D369AC59FA70C4FDA2A3 /* PasteTransform.swift in Sources */,
