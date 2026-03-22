@@ -35,6 +35,10 @@ class Clipboard {
 
   private var sourceApp: NSRunningApplication? { NSWorkspace.shared.frontmostApplication }
 
+  // Cache compiled regexes to avoid recompiling on every clipboard poll
+  private var cachedIgnoreRegexps: [String] = []
+  private var cachedIgnoreRegexes: [NSRegularExpression] = []
+
   init() {
     changeCount = pasteboard.changeCount
   }
@@ -110,7 +114,7 @@ class Clipboard {
 
   // Based on https://github.com/Clipy/Clipy/blob/develop/Clipy/Sources/Services/PasteService.swift.
   func paste() {
-    Accessibility.check()
+    guard Accessibility.check() else { return }
 
     // Add flag that left/right modifier key has been pressed.
     // See https://github.com/TermiT/Flycut/pull/18 for details.
@@ -225,6 +229,7 @@ class Clipboard {
 
     historyItem.application = sourceApp?.bundleIdentifier
     historyItem.title = historyItem.generateTitle()
+    historyItem.category = ContentCategory.detect(item: historyItem).rawValue
 
     onNewCopyHooks.forEach({ $0(historyItem) })
   }
@@ -246,19 +251,18 @@ class Clipboard {
   }
 
   private func shouldIgnore(_ item: NSPasteboardItem) -> Bool {
-    for regexp in Defaults[.ignoreRegexp] {
-      if let string = item.string(forType: .string) {
-        do {
-          let regex = try NSRegularExpression(pattern: regexp)
-          if regex.numberOfMatches(in: string, range: NSRange(string.startIndex..., in: string)) > 0 {
-            return true
-          }
-        } catch {
-          return false
-        }
-      }
+    guard let string = item.string(forType: .string) else {
+      return false
     }
-    return false
+
+    let currentPatterns = Defaults[.ignoreRegexp]
+    if currentPatterns != cachedIgnoreRegexps {
+      cachedIgnoreRegexps = currentPatterns
+      cachedIgnoreRegexes = currentPatterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }
+
+    let range = NSRange(string.startIndex..., in: string)
+    return cachedIgnoreRegexes.contains { $0.numberOfMatches(in: string, range: range) > 0 }
   }
 
   private func isEmptyString(_ item: NSPasteboardItem) -> Bool {

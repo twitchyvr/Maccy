@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Defaults
 import Sauce
 import SwiftData
@@ -60,6 +61,8 @@ class HistoryItem {
   ]
 
   var application: String?
+  var category: String = ""
+  var contentHash: String = ""
   var firstCopiedAt: Date = Date.now
   var lastCopiedAt: Date = Date.now
   var numberOfCopies: Int = 1
@@ -70,9 +73,22 @@ class HistoryItem {
   var contents: [HistoryItemContent] = []
 
   init(contents: [HistoryItemContent] = []) {
-    self.firstCopiedAt = firstCopiedAt
-    self.lastCopiedAt = lastCopiedAt
     self.contents = contents
+    self.contentHash = Self.computeHash(contents)
+  }
+
+  static func computeHash(_ contents: [HistoryItemContent]) -> String {
+    var hasher = SHA256()
+    let sortedContents = contents
+      .filter { !transientTypes.contains($0.type) }
+      .sorted { $0.type < $1.type }
+    for content in sortedContents {
+      hasher.update(data: Data(content.type.utf8))
+      if let value = content.value {
+        hasher.update(data: value)
+      }
+    }
+    return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
   }
 
   func supersedes(_ item: HistoryItem) -> Bool {
@@ -238,6 +254,9 @@ class HistoryItem {
       return observation.topCandidates(1).first?.string
     }
 
-    self.title = recognizedStrings.joined(separator: "\n")
+    let recognizedText = recognizedStrings.joined(separator: "\n")
+    DispatchQueue.main.async { [weak self] in
+      self?.title = recognizedText
+    }
   }
 }

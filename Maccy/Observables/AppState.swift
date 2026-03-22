@@ -8,7 +8,7 @@ import SwiftUI
 class AppState: Sendable {
   static let shared = AppState(history: History.shared, footer: Footer())
 
-  let multiSelectionEnabled = false
+  let multiSelectionEnabled = true
 
   var appDelegate: AppDelegate?
   var popup: Popup
@@ -51,8 +51,30 @@ class AppState: Sendable {
     preview.slideoutWidth = Defaults[.previewWidth]
   }
 
+  /// Callback for AI transform — set by ContentView
+  var onAITransform: (() -> Void)?
+
   @MainActor
   func select() {
+    // Intercept :ai queries — delegate to ContentView's async handler
+    let query = history.searchQuery.trimmingCharacters(in: .whitespaces)
+    if query.lowercased().hasPrefix(":ai ") && query.count > 4 {
+      onAITransform?()
+      return
+    }
+
+    // Intercept regular transforms — apply immediately
+    if let transform = PasteTransform.find(query) {
+      if let item = navigator.leadHistoryItem, let text = item.item.text {
+        let result = transform.transform(text)
+        history.searchQuery = ""
+        popup.close()
+        Clipboard.shared.copy(result)
+        Clipboard.shared.paste()
+      }
+      return
+    }
+
     if !navigator.selection.isEmpty {
       if navigator.isMultiSelectInProgress {
         navigator.isManualMultiSelect = false
@@ -146,6 +168,14 @@ class AppState: Sendable {
             toolbarIcon: NSImage.nosign!
           ) {
             IgnoreSettingsPane()
+          },
+          Settings.Pane(
+            identifier: Settings.PaneIdentifier.insights,
+            title: "Insights",
+            toolbarIcon: NSImage.chartbar!
+          ) {
+            InsightsView()
+              .modelContainer(Storage.shared.container)
           },
           Settings.Pane(
             identifier: Settings.PaneIdentifier.advanced,

@@ -96,7 +96,24 @@ class Search {
     within: [Searchable],
     options: NSString.CompareOptions
   ) -> [SearchResult] {
-    return within.compactMap { simpleSearch(for: string, in: $0.title, of: $0, options: options) }
+    return within.compactMap { item in
+      // Search title first
+      if let result = simpleSearch(for: string, in: item.title, of: item, options: options) {
+        return result
+      }
+      // Also search by source app name (e.g., "Chrome", "VS Code")
+      if let app = item.application {
+        if let result = simpleSearch(for: string, in: app, of: item, options: options) {
+          return SearchResult(score: result.score, object: item, ranges: [])
+        }
+      }
+      // Also search by category (e.g., "URL", "Code")
+      let category = item.item.category
+      if !category.isEmpty, let result = simpleSearch(for: string, in: category, of: item, options: options) {
+        return SearchResult(score: result.score, object: item, ranges: [])
+      }
+      return nil
+    }
   }
 
   private func simpleSearch(

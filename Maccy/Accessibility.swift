@@ -3,9 +3,14 @@ import AppKit
 struct Accessibility {
   private static var allowed: Bool { AXIsProcessTrustedWithOptions(nil) }
 
-  static func check() {
+  @discardableResult
+  static func check() -> Bool {
     guard !allowed else {
-      return
+      return true
     }
+
+    let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+    AXIsProcessTrustedWithOptions(options)
+    return false
   }
 }

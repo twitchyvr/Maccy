@@ -1,0 +1,26 @@
+{
+  "name": "@maccy/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server exposing Maccy clipboard history to AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "maccy-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
