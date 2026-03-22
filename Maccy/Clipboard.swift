@@ -229,6 +229,7 @@ class Clipboard {
 
     historyItem.application = sourceApp?.bundleIdentifier
     historyItem.title = historyItem.generateTitle()
+    historyItem.category = ContentCategory.detect(item: historyItem).rawValue
 
     onNewCopyHooks.forEach({ $0(historyItem) })
   }

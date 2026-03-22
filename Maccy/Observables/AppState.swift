@@ -148,6 +148,14 @@ class AppState: Sendable {
             IgnoreSettingsPane()
           },
           Settings.Pane(
+            identifier: Settings.PaneIdentifier.insights,
+            title: "Insights",
+            toolbarIcon: NSImage.chartbar!
+          ) {
+            InsightsView()
+              .modelContainer(Storage.shared.container)
+          },
+          Settings.Pane(
             identifier: Settings.PaneIdentifier.advanced,
             title: NSLocalizedString("Title", tableName: "AdvancedSettings", comment: ""),
             toolbarIcon: NSImage.gearshape2!

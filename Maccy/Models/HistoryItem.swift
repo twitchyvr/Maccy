@@ -61,6 +61,7 @@ class HistoryItem {
   ]
 
   var application: String?
+  var category: String = ""
   var contentHash: String = ""
   var firstCopiedAt: Date = Date.now
   var lastCopiedAt: Date = Date.now
