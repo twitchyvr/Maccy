@@ -5,8 +5,14 @@ struct ContentView: View {
   @State private var appState = AppState.shared
   @State private var modifierFlags = ModifierFlags()
   @State private var scenePhase: ScenePhase = .background
+  @State private var suggestion: SmartSuggestion?
+  @State private var suggestionDismissed = false
 
   @FocusState private var searchFocused: Bool
+
+  private var transformMatches: [PasteTransform] {
+    PasteTransform.matches(for: appState.history.searchQuery)
+  }
 
   var body: some View {
     ZStack {
@@ -25,6 +31,25 @@ struct ContentView: View {
             )
 
             VStack(alignment: .leading, spacing: 0) {
+              // Smart suggestion banner
+              if let suggestion, !suggestionDismissed {
+                SmartSuggestionView(
+                  suggestion: suggestion,
+                  onAction: { handleSuggestionAction(suggestion) },
+                  onDismiss: { suggestionDismissed = true }
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.top, 4)
+              }
+
+              // Transform suggestions (shown when typing ":")
+              if !transformMatches.isEmpty {
+                TransformSuggestionsView(transforms: transformMatches) { transform in
+                  applyTransform(transform)
+                }
+                .transition(.opacity)
+              }
+
               HistoryListView(
                 searchQuery: $appState.history.searchQuery,
                 searchFocused: $searchFocused
@@ -56,6 +81,11 @@ struct ContentView: View {
         try? await appState.history.load()
       }
     }
+    .onChange(of: scenePhase) {
+      if scenePhase == .active && !suggestionDismissed {
+        suggestion = SmartSuggestion.generate(from: appState.history.items)
+      }
+    }
     .animation(.easeInOut(duration: 0.2), value: appState.searchVisible)
     .environment(appState)
     .environment(modifierFlags)
@@ -74,6 +104,31 @@ struct ContentView: View {
          window.identifier == NSUserInterfaceItemIdentifier(bundleIdentifier) {
         scenePhase = .background
       }
+    }
+  }
+
+  private func applyTransform(_ transform: PasteTransform) {
+    guard let selectedItem = appState.navigator.leadHistoryItem else { return }
+    guard let text = selectedItem.item.text else { return }
+
+    let transformed = transform.transform(text)
+    appState.history.searchQuery = ""
+    appState.popup.close()
+    Task { @MainActor in
+      Clipboard.shared.copy(transformed)
+      Clipboard.shared.paste()
+    }
+  }
+
+  private func handleSuggestionAction(_ suggestion: SmartSuggestion) {
+    switch suggestion.type {
+    case .pinSuggestion(let title):
+      if let item = appState.history.items.first(where: { $0.title == title }) {
+        appState.history.togglePin(item)
+      }
+      suggestionDismissed = true
+    default:
+      suggestionDismissed = true
     }
   }
 }

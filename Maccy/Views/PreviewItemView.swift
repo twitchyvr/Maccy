@@ -61,6 +61,49 @@ struct PreviewItemView: View {
       Divider()
         .padding(.vertical)
 
+      // Category badge with color swatch
+      if !item.item.category.isEmpty {
+        HStack(spacing: 5) {
+          if let category = ContentCategory(rawValue: item.item.category) {
+            Image(systemName: category.icon)
+              .foregroundStyle(.purple)
+          }
+          Text(item.item.category)
+            .font(.caption.bold())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.purple.opacity(0.12))
+            .clipShape(Capsule())
+
+          // If it's a color, show a large swatch
+          if item.item.category == ContentCategory.color.rawValue {
+            if let swatch = ColorImage.from(item.title) {
+              Image(nsImage: swatch)
+                .resizable()
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                  RoundedRectangle(cornerRadius: 4)
+                    .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                )
+            }
+          }
+        }
+        .padding(.bottom, 4)
+      }
+
+      // Content stats
+      if let text = item.item.text, !text.isEmpty {
+        HStack(spacing: 8) {
+          Label("\(text.count)", systemImage: "character.cursor.ibeam")
+          Label("\(text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count)", systemImage: "text.word.spacing")
+          Label("\(text.components(separatedBy: .newlines).count)", systemImage: "text.line.first.and.arrowtriangle.forward")
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .padding(.bottom, 4)
+      }
+
       if let application = item.application {
         HStack(spacing: 3) {
           Text("Application", tableName: "PreviewItemView")
