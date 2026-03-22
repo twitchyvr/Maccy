@@ -1,6 +1,16 @@
 import AppKit
 import Foundation
 
+/// Automatic content categorization for clipboard items.
+///
+/// Each clipboard entry is classified into a category using heuristic
+/// pattern matching (regex + structural analysis). Categories are stored
+/// on `HistoryItem.category` and used for:
+/// - Filter chips in the popup UI
+/// - Category icons in the clipboard list
+/// - Search by category name (e.g., typing "URL" finds all URLs)
+/// - Insights dashboard content type breakdown
+/// - MCP server `clipboard_search` and `clipboard_stats`
 enum ContentCategory: String, CaseIterable, Identifiable, Codable {
   case url = "URL"
   case code = "Code"
